@@ -22,11 +22,11 @@ export default function Home() {
             </SignedOut>
             <SignedIn>
               <div className="flex items-center gap-4">
-                <Link 
-                  href="/product" 
+                <Link
+                  href="/chat"
                   className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
                 >
-                  Go to App
+                  Chat
                 </Link>
                 <UserButton afterSignOutUrl="/" />
               </div>

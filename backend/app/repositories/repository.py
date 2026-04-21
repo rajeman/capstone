@@ -11,6 +11,10 @@ class DuplicateEmailError(Exception):
     pass
 
 
+# 1000 USD in cents (integer).
+INITIAL_WALLET_BALANCE_USD_CENTS = 1000 * 100
+
+
 class User(TimestampedDocument):
     email: Indexed(str, unique=True)
     name: str
@@ -24,6 +28,14 @@ class User(TimestampedDocument):
 
     class Settings:
         name = "users"
+
+
+class Wallet(TimestampedDocument):
+    clerk_user_id: Annotated[str, Indexed(unique=True)]
+    balance: int
+
+    class Settings:
+        name = "wallets"
 
 
 class UserRepository:
@@ -119,4 +131,8 @@ class UserRepository:
             await user.insert()
         except DuplicateKeyError:
             raise DuplicateEmailError from None
+        await Wallet(
+            clerk_user_id=sub,
+            balance=INITIAL_WALLET_BALANCE_USD_CENTS,
+        ).insert()
         return str(user.id), True
