@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
 import Link from 'next/link';
-import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
+import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 export default function Home() {
   return (
@@ -41,10 +41,11 @@ export default function Home() {
             <br />
             Big Business Idea
           </h2>
+
           <p className="text-xl text-gray-600 dark:text-gray-400 mb-12 max-w-2xl mx-auto">
             Harness the power of AI to discover innovative business opportunities tailored for the AI agent economy
           </p>
-          
+
           <SignedOut>
             <SignInButton mode="modal">
               <button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all transform hover:scale-105">
@@ -52,6 +53,7 @@ export default function Home() {
               </button>
             </SignInButton>
           </SignedOut>
+
           <SignedIn>
             <Link href="/product">
               <button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all transform hover:scale-105">
@@ -59,6 +61,7 @@ export default function Home() {
               </button>
             </Link>
           </SignedIn>
+
         </div>
       </div>
     </main>

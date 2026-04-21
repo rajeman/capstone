@@ -1,7 +1,8 @@
-from pymongo import AsyncMongoClient
-from pymongo.errors import DuplicateKeyError
+from typing import Annotated
 
 from beanie import Indexed
+from pymongo import AsyncMongoClient
+from pymongo.errors import DuplicateKeyError
 
 from app.models.timestamped import TimestampedDocument
 
@@ -13,7 +14,8 @@ class DuplicateEmailError(Exception):
 class User(TimestampedDocument):
     email: Indexed(str, unique=True)
     name: str
-    clerk_user_id: str | None = None
+    # Clerk `sub`; unique when set (sparse so non-Clerk users can have null).
+    clerk_user_id: Annotated[str | None, Indexed(unique=True, sparse=True)] = None
     first_name: str | None = None
     last_name: str | None = None
     image_url: str | None = None
@@ -57,40 +59,64 @@ class UserRepository:
         except DuplicateKeyError:
             raise DuplicateEmailError from None
 
+    def _update_from_clerk_profile(self, user: User, profile: dict) -> None:
+        """Apply only fields Clerk provided (non-None). Never change email or Mongo id."""
+        p = profile
+        touched = False
+        if p["first_name"] is not None:
+            user.first_name = p["first_name"]
+            touched = True
+        if p["last_name"] is not None:
+            user.last_name = p["last_name"]
+            touched = True
+        if p["username"] is not None:
+            user.username = p["username"]
+            touched = True
+        if p["image_url"] is not None:
+            user.image_url = p["image_url"]
+            touched = True
+        if p["phone_number"] is not None:
+            user.phone_number = p["phone_number"]
+            touched = True
+        if touched:
+            user.name = self._display_name(
+                user.first_name,
+                user.last_name,
+                user.username,
+                user.email,
+            )
+
     async def sync_user_from_clerk(self, payload: dict) -> tuple[str, bool]:
+        """Lookup by Clerk id only. Insert all profile fields if new; otherwise merge provided fields."""
         sub = payload["sub"]
         profile = self._claims_to_profile(payload)
 
-        user = await User.find_one(
-            (User.clerk_user_id == sub) | (User.email == profile["email"])
-        )
-
+        user = await User.find_one(User.clerk_user_id == sub)
         if user:
-            is_new = False
-        else:
-            user = User(**profile)
-            is_new = True
-
-        user.clerk_user_id = sub
-        user.name = self._display_name(
-            profile["first_name"],
-            profile["last_name"],
-            profile["username"],
-            profile["email"],
-        )
-        user.first_name = profile["first_name"]
-        user.last_name = profile["last_name"]
-        user.username = profile["username"]
-        user.image_url = profile["image_url"]
-        user.phone_number = profile["phone_number"]
-        user.email = profile["email"]
-
-        try:
-            if is_new:
-                await user.insert()
-            else:
+            self._update_from_clerk_profile(user, profile)
+            try:
                 await user.save()
+            except DuplicateKeyError:
+                raise DuplicateEmailError from None
+            return str(user.id), False
+
+        user = User(
+            clerk_user_id=sub,
+            email=profile["email"],
+            name=self._display_name(
+                profile["first_name"],
+                profile["last_name"],
+                profile["username"],
+                profile["email"],
+            ),
+            first_name=profile["first_name"],
+            last_name=profile["last_name"],
+            username=profile["username"],
+            image_url=profile["image_url"],
+            phone_number=profile["phone_number"],
+        )
+        try:
+            await user.insert()
         except DuplicateKeyError:
             raise DuplicateEmailError from None
-
-        return str(user.id), is_new
+        return str(user.id), True
