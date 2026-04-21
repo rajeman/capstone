@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from pymongo import AsyncMongoClient
 
-from app.db import get_mongo_client
+from app.deps import get_user_repository
 from app.repositories.repository import DuplicateEmailError, UserRepository
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -25,12 +24,6 @@ class UserCreate(BaseModel):
         if isinstance(v, str):
             return v.strip()
         return v
-
-
-def get_user_repository(
-    client: AsyncMongoClient = Depends(get_mongo_client),
-) -> UserRepository:
-    return UserRepository(client)
 
 
 @router.post("", status_code=201)
