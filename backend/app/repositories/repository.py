@@ -71,6 +71,9 @@ class UserRepository:
         except DuplicateKeyError:
             raise DuplicateEmailError from None
 
+    async def get_user_by_clerk_id(self, clerk_user_id: str) -> User | None:
+        return await User.find_one(User.clerk_user_id == clerk_user_id)
+
     def _update_from_clerk_profile(self, user: User, profile: dict) -> None:
         """Apply only fields Clerk provided (non-None). Never change email or Mongo id."""
         p = profile
