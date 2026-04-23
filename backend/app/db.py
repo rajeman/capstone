@@ -1,3 +1,4 @@
+from beanie import init_beanie
 from pymongo import AsyncMongoClient
 
 from app.config import settings
@@ -7,7 +8,6 @@ mongo_client: AsyncMongoClient | None = None
 
 async def connect(document_models: list[type]) -> None:
     global mongo_client
-    from beanie import init_beanie
 
     mongo_client = AsyncMongoClient(settings.database_uri)
     database = mongo_client.get_default_database()

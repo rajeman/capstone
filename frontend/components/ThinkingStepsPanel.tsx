@@ -3,6 +3,8 @@
 export type ThinkingStep = {
   id: string;
   label: string;
+  /** Optional short subtitle (keep non-technical). */
+  detail?: string;
   phase: "pending" | "running" | "done";
 };
 
@@ -23,18 +25,22 @@ export function ThinkingStepsPanel({ state }: ThinkingStepsPanelProps) {
     <div className="flex h-full min-h-0 flex-1 flex-col" aria-live="polite">
       <header className="shrink-0 border-b border-blue-100/80 px-5 py-4 dark:border-gray-700/80">
         <p className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-50">
-          Thinking
+          What we did
         </p>
         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-          {active ? "Working on your reply…" : "Steps appear while the assistant responds"}
+          {active
+            ? "Hang tight…"
+            : steps.length > 0
+              ? "Quick recap — nothing sensitive here"
+              : "A short recap will show here after you send a message"}
         </p>
       </header>
 
       <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-5 py-5">
         {showPlaceholder && (
           <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-            When you send a message, you&apos;ll see how the system reasons through your request
-            before the answer appears in the chat.
+            After you send a message, a few plain-language steps may appear here while the assistant
+            works.
           </p>
         )}
 
@@ -57,16 +63,23 @@ export function ThinkingStepsPanel({ state }: ThinkingStepsPanelProps) {
                     <span className="text-gray-300 dark:text-gray-600">{index + 1}</span>
                   )}
                 </span>
-                <span
-                  className={
-                    step.phase === "done"
-                      ? "text-gray-500 line-through decoration-gray-400 dark:text-gray-500"
-                      : step.phase === "running"
-                        ? "font-medium text-gray-900 dark:text-gray-100"
-                        : "text-gray-400 dark:text-gray-500"
-                  }
-                >
-                  {step.label}
+                <span className="min-w-0 flex-1">
+                  <span
+                    className={
+                      step.phase === "done"
+                        ? "text-gray-700 dark:text-gray-300"
+                        : step.phase === "running"
+                          ? "font-medium text-gray-900 dark:text-gray-100"
+                          : "text-gray-400 dark:text-gray-500"
+                    }
+                  >
+                    {step.label}
+                  </span>
+                  {step.detail ? (
+                    <span className="mt-1 block text-xs font-normal leading-snug text-gray-500 dark:text-gray-500">
+                      {step.detail}
+                    </span>
+                  ) : null}
                 </span>
               </li>
             ))}

@@ -1,9 +1,13 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ThinkingState } from "./ThinkingStepsPanel";
+import { postChat } from "../lib/chatApi";
+import type { ChatMessagePayload, ReasoningStepPayload } from "../lib/chatApi";
+
+import { ChatMarkdown } from "./ChatMarkdown";
+import type { ThinkingState, ThinkingStep } from "./ThinkingStepsPanel";
 
 type ChatMessage = {
   id: string;
@@ -12,34 +16,17 @@ type ChatMessage = {
   at: number;
 };
 
-const ASSISTANT_REPLIES = [
-  "I’m here to help you shape ideas. Tell me more about the problem you want to solve or the audience you care about.",
-  "That’s a solid direction. What constraints do you have — time, budget, or tech stack?",
-  "Consider starting with a narrow wedge: one persona, one workflow, one clear outcome.",
-  "When you’re ready, you can open the full generator from the header for a deeper pass.",
-];
-
-function randomReply(): string {
-  return ASSISTANT_REPLIES[Math.floor(Math.random() * ASSISTANT_REPLIES.length)];
+function toThinkingStepsFromReasoning(steps: ReasoningStepPayload[]): ThinkingStep[] {
+  return steps.map((s, i) => ({
+    id: s.id || `r-${i}`,
+    label: s.label,
+    detail: s.detail ?? undefined,
+    phase: "done" as const,
+  }));
 }
 
-const THINKING_LABELS = [
-  "Parse your message",
-  "Recall conversation context",
-  "Draft a response",
-];
-
-function buildThinkingSteps(
-  index: number,
-): { id: string; label: string; phase: "pending" | "running" | "done" }[] {
-  return THINKING_LABELS.map((label, j) => ({
-    id: `t-${j}`,
-    label,
-    phase: (j < index ? "done" : j === index ? "running" : "pending") as
-      | "pending"
-      | "running"
-      | "done",
-  }));
+function toPayload(messages: ChatMessage[]): ChatMessagePayload[] {
+  return messages.map((m) => ({ role: m.role, content: m.text }));
 }
 
 type ChatConversationProps = {
@@ -80,55 +67,23 @@ function PaperclipIcon(props: { className?: string }) {
 
 export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
   const { user, isLoaded } = useUser();
+  const { getToken } = useAuth();
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const onThinkingRef = useRef(onThinkingChange);
-  onThinkingRef.current = onThinkingChange;
-
-  const firstName = user?.firstName || user?.username || "there";
 
   useEffect(() => {
-    if (!isLoaded || !user || messages.length > 0) return;
-    setMessages([
-      {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        text: `Hi ${firstName}! I'm your IdeaGen assistant. What would you like to explore today?`,
-        at: Date.now(),
-      },
-    ]);
-  }, [isLoaded, user, firstName, messages.length]);
+    onThinkingRef.current = onThinkingChange;
+  }, [onThinkingChange]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [messages, sending]);
-
-  useEffect(() => {
-    if (!sending) {
-      onThinkingRef.current?.({ active: false, steps: [] });
-      return;
-    }
-
-    onThinkingRef.current?.({ active: true, steps: buildThinkingSteps(0) });
-
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    for (let i = 1; i < THINKING_LABELS.length; i++) {
-      timers.push(
-        setTimeout(() => {
-          onThinkingRef.current?.({ active: true, steps: buildThinkingSteps(i) });
-        }, 180 + i * 260),
-      );
-    }
-
-    return () => {
-      timers.forEach(clearTimeout);
-    };
-  }, [sending]);
 
   const send = useCallback(async () => {
     const trimmed = input.trim();
@@ -140,22 +95,86 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
       text: trimmed,
       at: Date.now(),
     };
-    setMessages((m) => [...m, userMsg]);
+    const nextMessages = [...messages, userMsg];
+    setMessages(nextMessages);
     setInput("");
+
+    const token = await getToken();
+    if (!token) {
+      onThinkingRef.current?.({ active: false, steps: [] });
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          text: "Could not read your session. Please sign in again.",
+          at: Date.now(),
+        },
+      ]);
+      return;
+    }
+
+    onThinkingRef.current?.({
+      active: true,
+      steps: [
+        {
+          id: "progress",
+          label: "Working on your message…",
+          phase: "running",
+        },
+      ],
+    });
     setSending(true);
 
-    await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
-
-    const assistantMsg: ChatMessage = {
-      id: `a-${Date.now()}`,
-      role: "assistant",
-      text: randomReply(),
-      at: Date.now(),
-    };
-    setMessages((m) => [...m, assistantMsg]);
-    setSending(false);
-    inputRef.current?.focus();
-  }, [input, sending]);
+    try {
+      const { message, reasoning_steps } = await postChat(token, toPayload(nextMessages));
+      const assistantMsg: ChatMessage = {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        text: message,
+        at: Date.now(),
+      };
+      setMessages((m) => [...m, assistantMsg]);
+      const panelSteps = toThinkingStepsFromReasoning(reasoning_steps);
+      onThinkingRef.current?.({
+        active: false,
+        steps:
+          panelSteps.length > 0
+            ? panelSteps
+            : [
+                {
+                  id: "summary-missing",
+                  label: "All set",
+                  detail: "No quick recap this time — your answer is in the chat.",
+                  phase: "done",
+                },
+              ],
+      });
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : "Something went wrong.";
+      const assistantMsg: ChatMessage = {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        text: `Sorry, I couldn’t reach the assistant: ${detail}`,
+        at: Date.now(),
+      };
+      setMessages((m) => [...m, assistantMsg]);
+      onThinkingRef.current?.({
+        active: false,
+        steps: [
+          {
+            id: "error",
+            label: "Could not complete the request",
+            detail,
+            phase: "done",
+          },
+        ],
+      });
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
+    }
+  }, [input, sending, messages, getToken]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -176,12 +195,12 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
     <div
       className="flex min-h-0 flex-1 flex-col"
       role="region"
-      aria-label="Chat with IdeaGen assistant"
+      aria-label="Chat with banking assistant"
     >
       <header className="shrink-0 border-b border-blue-100/80 px-5 py-4 dark:border-gray-700/80">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-50">
-            IdeaGen assistant
+            Banking assistant
           </h2>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-800/80">
             <span className="relative flex h-2 w-2">
@@ -198,6 +217,13 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
         ref={scrollRef}
         className="chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-5"
       >
+        {messages.length === 0 && !sending && (
+          <p className="rounded-2xl border border-dashed border-blue-200/80 bg-white/50 px-4 py-6 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-400">
+            Hi{user.firstName ? `, ${user.firstName}` : ""}. Chat casually, ask about your profile,
+            or use banking features — transfers, balance, recent transactions, and finding people by
+            name.
+          </p>
+        )}
         {messages.map((m) => (
           <div
             key={m.id}
@@ -210,7 +236,7 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
                   : "rounded-3xl rounded-bl-lg border border-white/80 bg-white px-4 py-3 text-gray-800 shadow-md ring-1 ring-blue-100/50 dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-100 dark:ring-gray-700/50"
               }`}
             >
-              {m.text}
+              <ChatMarkdown content={m.text} variant={m.role} />
             </div>
           </div>
         ))}

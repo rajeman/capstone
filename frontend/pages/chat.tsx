@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useCallback, useState } from "react";
 import { RedirectToSignIn, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { ChatConversation } from "../components/ChatConversation";
@@ -10,6 +11,7 @@ import {
 } from "../components/ThinkingStepsPanel";
 
 export default function ChatPage() {
+  const router = useRouter();
   const [thinking, setThinking] = useState<ThinkingState>({
     active: false,
     steps: [],
@@ -18,6 +20,14 @@ export default function ChatPage() {
   const handleThinkingChange = useCallback((state: ThinkingState) => {
     setThinking(state);
   }, []);
+
+  const startNewChat = useCallback(() => {
+    if (router.pathname === "/chat") {
+      router.reload();
+      return;
+    }
+    void router.push("/chat");
+  }, [router]);
 
   return (
     <>
@@ -38,15 +48,16 @@ export default function ChatPage() {
                 href="/"
                 className="text-2xl font-bold text-gray-800 dark:text-gray-100"
               >
-                IdeaGen
+                Smart Pay
               </Link>
               <div className="flex items-center gap-4">
-                <Link
-                  href="/product"
+                <button
+                  type="button"
+                  onClick={startNewChat}
                   className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700"
                 >
-                  Go to App
-                </Link>
+                  New Chat
+                </button>
                 <UserButton afterSignOutUrl="/" />
               </div>
             </nav>

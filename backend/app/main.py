@@ -4,11 +4,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db import connect, disconnect
 from app.document_models import DOCUMENT_MODELS
-from app.routers import auth, users
+from app.llm import init_openai
+from app.routers import auth, chat, users
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    init_openai()
     await connect(document_models=DOCUMENT_MODELS)
     try:
         yield
@@ -30,6 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(chat.router)
 app.include_router(users.router)
 
 

@@ -14,6 +14,14 @@ class Settings(BaseSettings):
         default="",
         description="Optional: shared secret for Next.js verified-claims sync.",
     )
+    openai_api_key: str = Field(
+        default="",
+        description="OpenAI API key for Agents SDK. If empty, OPENAI_API_KEY from the environment is used.",
+    )
+    pushover_application_token: str = Field(
+        default="",
+        description="Pushover application API token (https://pushover.net/). If empty, wallet Pushover alerts are disabled.",
+    )
 
     @property
     def clerk_authorized_party_list(self) -> list[str]:
