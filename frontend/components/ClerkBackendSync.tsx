@@ -3,11 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useRef } from "react";
 
-function apiBase(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://127.0.0.1:8000"
-  );
-}
+import { publicApiBase } from "../lib/publicApiBase";
 
 /**
  * POST /auth/clerk/sync after sign-in (including first load with an existing session)
@@ -38,7 +34,7 @@ export function ClerkBackendSync() {
         const token = await getToken();
         if (!token) return;
 
-        const res = await fetch(`${apiBase()}/auth/clerk/sync`, {
+        const res = await fetch(`${publicApiBase()}/auth/clerk/sync`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,

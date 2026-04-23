@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.db import connect, disconnect
 from app.document_models import DOCUMENT_MODELS
 from app.llm import init_openai
@@ -39,3 +41,9 @@ app.include_router(users.router)
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok"}
+
+
+# Docker / single-binary deploy: Next `output: "export"` copied to ./static (cwd is WORKDIR).
+_static = Path.cwd() / "static"
+if _static.is_dir():
+    app.mount("/", StaticFiles(directory=str(_static), html=True), name="static")
