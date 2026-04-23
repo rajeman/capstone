@@ -1,0 +1,85 @@
+name: Build
+description: Terraform init on every run; apply on main only (TF_VAR_* from GitHub).
+
+inputs:
+  aws-access-key-id:
+    description: AWS access key ID used before assuming the deploy role.
+    required: true
+  aws-secret-access-key:
+    description: AWS secret access key.
+    required: true
+  aws-region:
+    description: AWS region (Terraform backend and provider).
+    required: true
+  role-to-assume:
+    description: IAM role ARN to assume (needs Terraform state + apply permissions on main).
+    required: true
+  terraform-apply:
+    description: When the string 'true', run terraform apply -auto-approve after init (e.g. push to main).
+    required: true
+  tf-var-database-uri:
+    description: TF_VAR_database_uri
+    required: true
+  tf-var-openai-api-key:
+    description: TF_VAR_openai_api_key
+    required: true
+  tf-var-clerk-secret-key:
+    description: TF_VAR_clerk_secret_key
+    required: true
+  tf-var-clerk-jwks-url:
+    description: TF_VAR_clerk_jwks_url
+    required: true
+  tf-var-clerk-authorized-parties:
+    description: TF_VAR_clerk_authorized_parties
+    required: true
+  tf-var-clerk-jwt-key:
+    description: TF_VAR_clerk_jwt_key
+    required: true
+  tf-var-clerk-sync-secret:
+    description: TF_VAR_clerk_sync_secret
+    required: true
+  tf-var-pushover-application-token:
+    description: TF_VAR_pushover_application_token
+    required: true
+  tf-var-next-public-api-url:
+    description: TF_VAR_next_public_api_url
+    required: true
+  tf-var-next-public-clerk-publishable-key:
+    description: TF_VAR_next_public_clerk_publishable_key
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
+        role-to-assume: ${{ inputs.role-to-assume }}
+        role-duration-seconds: 3600
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.9.0"
+
+    - name: Terraform init and apply (main only)
+      shell: bash
+      working-directory: terraform
+      env:
+        TF_VAR_database_uri: ${{ inputs.tf-var-database-uri }}
+        TF_VAR_openai_api_key: ${{ inputs.tf-var-openai-api-key }}
+        TF_VAR_clerk_secret_key: ${{ inputs.tf-var-clerk-secret-key }}
+        TF_VAR_clerk_jwks_url: ${{ inputs.tf-var-clerk-jwks-url }}
+        TF_VAR_clerk_authorized_parties: ${{ inputs.tf-var-clerk-authorized-parties }}
+        TF_VAR_clerk_jwt_key: ${{ inputs.tf-var-clerk-jwt-key }}
+        TF_VAR_clerk_sync_secret: ${{ inputs.tf-var-clerk-sync-secret }}
+        TF_VAR_pushover_application_token: ${{ inputs.tf-var-pushover-application-token }}
+        TF_VAR_next_public_api_url: ${{ inputs.tf-var-next-public-api-url }}
+        TF_VAR_next_public_clerk_publishable_key: ${{ inputs.tf-var-next-public-clerk-publishable-key }}
+      run: |
+        terraform init -input=false
+        terraform apply -auto-approve -input=false
+        terraform output

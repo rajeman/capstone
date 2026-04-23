@@ -1,0 +1,61 @@
+name: Deploy
+description: Docker build and push capstone image to capstone-app-ecr.
+
+inputs:
+  aws-access-key-id:
+    description: AWS access key ID used before assuming the deploy role.
+    required: true
+  aws-secret-access-key:
+    description: AWS secret access key.
+    required: true
+  aws-region:
+    description: AWS region (ECR).
+    required: true
+  role-to-assume:
+    description: IAM role ARN to assume (needs ECR push permissions).
+    required: true
+  aws-account-id:
+    description: AWS account ID for the ECR registry URL (12-digit).
+    required: true
+  next-public-clerk-publishable-key:
+    description: Clerk publishable key (NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY at docker build).
+    required: true
+  next-public-api-url:
+    description: Public API URL for the Next bundle (NEXT_PUBLIC_API_URL at docker build).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: deploy · docker build
+      shell: bash
+      env:
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ inputs.next-public-clerk-publishable-key }}
+        NEXT_PUBLIC_API_URL: ${{ inputs.next-public-api-url }}
+      run: |
+        set -euo pipefail
+        docker build \
+          --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" \
+          -t capstone:latest .
+
+    - name: deploy · aws credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
+        role-to-assume: ${{ inputs.role-to-assume }}
+        role-duration-seconds: 3600
+
+    - name: deploy · ecr login, tag, push
+      shell: bash
+      env:
+        AWS_ACCOUNT_ID: ${{ inputs.aws-account-id }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        set -euo pipefail
+        REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        aws ecr get-login-password --region "${AWS_REGION}" \
+          | docker login --username AWS --password-stdin "${REGISTRY}"
+        docker tag capstone:latest "${REGISTRY}/capstone-app-ecr:latest"
+        docker push "${REGISTRY}/capstone-app-ecr:latest"

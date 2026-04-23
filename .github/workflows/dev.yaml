@@ -1,0 +1,58 @@
+name: Capstone Dev CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v4
+
+      - name: Terraform init (PR) or init + apply (main)
+        uses: ./.github/actions/build
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+          role-to-assume: ${{ secrets.MAIN_AWS_DEPLOY_DEV_ARN }}
+          terraform-apply: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tf-var-database-uri: ${{ secrets.TF_VAR_database_uri }}
+          tf-var-openai-api-key: ${{ secrets.TF_VAR_openai_api_key }}
+          tf-var-clerk-secret-key: ${{ secrets.TF_VAR_clerk_secret_key }}
+          tf-var-clerk-jwks-url: ${{ secrets.TF_VAR_clerk_jwks_url }}
+          tf-var-clerk-authorized-parties: ${{ secrets.TF_VAR_clerk_authorized_parties }}
+          tf-var-clerk-jwt-key: ${{ secrets.TF_VAR_clerk_jwt_key }}
+          tf-var-clerk-sync-secret: ${{ secrets.TF_VAR_clerk_sync_secret }}
+          tf-var-pushover-application-token: ${{ secrets.TF_VAR_pushover_application_token }}
+          tf-var-next-public-api-url: ${{ secrets.TF_VAR_next_public_api_url }}
+          tf-var-next-public-clerk-publishable-key: ${{ secrets.TF_VAR_next_public_clerk_publishable_key }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v4
+
+      - name: Push image to ECR (capstone-app-ecr)
+        uses: ./.github/actions/deploy
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-1
+          role-to-assume: ${{ secrets.MAIN_AWS_DEPLOY_DEV_ARN }}
+          aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
+          next-public-clerk-publishable-key: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          next-public-api-url: ${{ secrets.NEXT_PUBLIC_API_URL }}
