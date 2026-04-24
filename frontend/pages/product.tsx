@@ -40,10 +40,10 @@ export default function Product() {
                 {/* Header */}
                 <header className="text-center mb-12">
                     <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-4">
-                        Business Idea Generator
+                        Smart Pay
                     </h1>
                     <p className="text-gray-600 dark:text-gray-400 text-lg">
-                        AI-powered innovation at your fingertips
+                        Conversational financial assistance, streamed live
                     </p>
                 </header>
 
@@ -53,7 +53,7 @@ export default function Product() {
                         {idea === '…loading' ? (
                             <div className="flex items-center justify-center py-12">
                                 <div className="animate-pulse text-gray-400">
-                                    Generating your business idea...
+                                    Connecting to Smart Pay…
                                 </div>
                             </div>
                         ) : (

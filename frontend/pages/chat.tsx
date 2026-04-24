@@ -63,7 +63,7 @@ export default function ChatPage() {
             </nav>
 
             <h1 className="mb-5 shrink-0 text-xl font-semibold text-gray-800 dark:text-gray-200">
-              Chat
+              Transact in conversation
             </h1>
 
             <div

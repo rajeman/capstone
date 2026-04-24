@@ -37,13 +37,13 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center py-24">
           <h2 className="text-6xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-6">
-            Generate Your Next
+            Smart Pay
             <br />
-            Big Business Idea
+            Money moves in conversation
           </h2>
 
           <p className="text-xl text-gray-600 dark:text-gray-400 mb-12 max-w-2xl mx-auto">
-            Harness the power of AI to discover innovative business opportunities tailored for the AI agent economy
+            Send transfers, check balances, review activity, and find people—all through a natural chat with your financial assistant.
           </p>
 
           <SignedOut>
@@ -55,9 +55,9 @@ export default function Home() {
           </SignedOut>
 
           <SignedIn>
-            <Link href="/product">
+            <Link href="/chat">
               <button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-xl text-lg transition-all transform hover:scale-105">
-                Generate Ideas Now
+                Open Smart Pay
               </button>
             </Link>
           </SignedIn>

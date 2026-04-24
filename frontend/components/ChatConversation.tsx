@@ -195,12 +195,12 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
     <div
       className="flex min-h-0 flex-1 flex-col"
       role="region"
-      aria-label="Chat with banking assistant"
+      aria-label="Chat with Smart Pay"
     >
       <header className="shrink-0 border-b border-blue-100/80 px-5 py-4 dark:border-gray-700/80">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-gray-50">
-            Banking assistant
+            Smart Pay
           </h2>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-800/80">
             <span className="relative flex h-2 w-2">
@@ -210,7 +210,9 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
             online
           </span>
         </div>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Conversation</p>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+          Financial transactions and questions by chat
+        </p>
       </header>
 
       <div
@@ -219,9 +221,9 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
       >
         {messages.length === 0 && !sending && (
           <p className="rounded-2xl border border-dashed border-blue-200/80 bg-white/50 px-4 py-6 text-center text-sm text-gray-600 dark:border-gray-600 dark:bg-gray-900/30 dark:text-gray-400">
-            Hi{user.firstName ? `, ${user.firstName}` : ""}. Chat casually, ask about your profile,
-            or use banking features — transfers, balance, recent transactions, and finding people by
-            name.
+            Hi{user.firstName ? `, ${user.firstName}` : ""}. Smart Pay is your conversational wallet:
+            send money, check balances, review recent activity, look up people by name, and ask
+            anything about your account—in plain language.
           </p>
         )}
         {messages.map((m) => (
