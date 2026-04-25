@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from app.db import connect, disconnect
 from app.document_models import DOCUMENT_MODELS
 from app.llm import init_openai
-from app.routers import auth, chat, users
+from app.routers import auth, chat, dev_wallet, users
 
 
 @asynccontextmanager
@@ -25,9 +25,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Dev-friendly: allow any browser origin (LAN, tunnel, etc.). Starlette echoes
+# the request Origin when allow_credentials=True with allow_origins=["*"].
 app.add_middleware(
     CORSMiddleware,
-    allow_origins="*",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,6 +37,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(dev_wallet.router)
 app.include_router(users.router)
 
 

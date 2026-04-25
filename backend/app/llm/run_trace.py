@@ -14,6 +14,7 @@ _FRIENDLY_TOOL_LABEL: dict[str, str] = {
     "get_user_info_by_clerk_id": "Looked up your profile on file",
     "searchUsersByName": "Searched for the person you mentioned",
     "getCurrentDateTime": "Confirmed today's date and time",
+    "buildTransactionHistoryAnalytics": "Built your spending and balance charts",
 }
 
 

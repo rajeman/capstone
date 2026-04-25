@@ -1,5 +1,8 @@
 "use client";
 
+import type { AnalyticsChartSpec } from "../lib/analyticsChartTypes";
+import { AnalyticsChartsPanel } from "./AnalyticsChartsPanel";
+
 export type ThinkingStep = {
   id: string;
   label: string;
@@ -15,9 +18,10 @@ export type ThinkingState = {
 
 type ThinkingStepsPanelProps = {
   state: ThinkingState;
+  charts?: AnalyticsChartSpec[];
 };
 
-export function ThinkingStepsPanel({ state }: ThinkingStepsPanelProps) {
+export function ThinkingStepsPanel({ state, charts = [] }: ThinkingStepsPanelProps) {
   const { active, steps } = state;
   const showPlaceholder = !active && steps.length === 0;
 
@@ -36,7 +40,7 @@ export function ThinkingStepsPanel({ state }: ThinkingStepsPanelProps) {
         </p>
       </header>
 
-      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="chat-scroll min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-5">
         {showPlaceholder && (
           <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">
             After you send a message, a few plain-language steps may appear here while the assistant
@@ -85,6 +89,8 @@ export function ThinkingStepsPanel({ state }: ThinkingStepsPanelProps) {
             ))}
           </ol>
         )}
+
+        <AnalyticsChartsPanel charts={charts} />
       </div>
     </div>
   );

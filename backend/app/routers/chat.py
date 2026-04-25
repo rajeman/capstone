@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.clerk_auth import get_clerk_session_payload
 from app.llm.agent import create_capstone_agent
 from app.llm.run_trace import user_facing_trace_steps
+from app.routers.chart_extract import extract_transaction_charts_from_run_items
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -38,6 +39,10 @@ class ReasoningStepOut(BaseModel):
 class ChatResponse(BaseModel):
     message: str
     reasoning_steps: list[ReasoningStepOut] = Field(default_factory=list)
+    charts: list[Any] = Field(
+        default_factory=list,
+        description="Transaction analytics charts when the agent generates them.",
+    )
 
 
 def _strip_json_fence(text: str) -> str:
@@ -111,11 +116,13 @@ def _loads_structured_json(text: str) -> dict[str, Any] | None:
     return None
 
 
-def parse_structured_agent_output(text: str) -> tuple[str, list[ReasoningStepOut]]:
-    """Parse the model's final JSON (steps / action / final_answer) into chat + thinking panel."""
+def parse_structured_agent_output(
+    text: str,
+) -> tuple[str, list[ReasoningStepOut], list[dict[str, Any]]]:
+    """Parse final JSON (steps/action/final_answer/optional charts) for chat + side panel."""
     data = _loads_structured_json(text)
     if data is None:
-        return text, []
+        return text, [], []
 
     steps_out: list[ReasoningStepOut] = []
     raw_steps = data.get("steps")
@@ -127,6 +134,12 @@ def parse_structured_agent_output(text: str) -> tuple[str, list[ReasoningStepOut
                 )
 
     # "action" is still required in JSON for the model’s bookkeeping; do not surface it in the UI.
+    charts_out: list[dict[str, Any]] = []
+    raw_charts = data.get("charts")
+    if isinstance(raw_charts, list):
+        for chart in raw_charts:
+            if isinstance(chart, dict):
+                charts_out.append(chart)
 
     final = data.get("final_answer")
     if isinstance(final, str) and final.strip():
@@ -143,7 +156,7 @@ def parse_structured_agent_output(text: str) -> tuple[str, list[ReasoningStepOut
             )
         )
 
-    return message, steps_out
+    return message, steps_out, charts_out
 
 
 @router.post("", response_model=ChatResponse)
@@ -165,11 +178,14 @@ async def chat_turn(request: Request, body: ChatRequest) -> ChatResponse:
     result = await Runner.run(agent, input_items)
     out = result.final_output
     text = out if isinstance(out, str) else (str(out) if out is not None else "")
-    message, reasoning_steps = parse_structured_agent_output(text)
+    message, reasoning_steps, charts_from_message = parse_structured_agent_output(text)
     if not reasoning_steps:
         trace_rows = user_facing_trace_steps(result.new_items)
         reasoning_steps = [
             ReasoningStepOut(id=row["id"], label=row["label"], detail=row.get("detail"))
             for row in trace_rows
         ]
-    return ChatResponse(message=message, reasoning_steps=reasoning_steps)
+    charts = extract_transaction_charts_from_run_items(result.new_items)
+    if not charts and charts_from_message:
+        charts = charts_from_message
+    return ChatResponse(message=message, reasoning_steps=reasoning_steps, charts=charts)

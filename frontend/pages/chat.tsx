@@ -9,6 +9,7 @@ import {
   ThinkingStepsPanel,
   type ThinkingState,
 } from "../components/ThinkingStepsPanel";
+import type { AnalyticsChartSpec } from "../lib/analyticsChartTypes";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -16,9 +17,14 @@ export default function ChatPage() {
     active: false,
     steps: [],
   });
+  const [charts, setCharts] = useState<AnalyticsChartSpec[]>([]);
 
   const handleThinkingChange = useCallback((state: ThinkingState) => {
     setThinking(state);
+  }, []);
+
+  const handleChartsChange = useCallback((nextCharts: AnalyticsChartSpec[]) => {
+    setCharts(nextCharts);
   }, []);
 
   const startNewChat = useCallback(() => {
@@ -70,11 +76,14 @@ export default function ChatPage() {
               className="grid min-h-[min(520px,calc(100vh-11rem))] flex-1 grid-cols-1 overflow-hidden rounded-3xl border border-white/60 bg-white/45 shadow-[0_8px_40px_-4px_rgba(59,130,246,0.18)] backdrop-blur-xl dark:border-white/10 dark:bg-gray-950/35 dark:shadow-black/30 lg:grid-cols-[3fr_2fr]"
             >
               <div className="flex min-h-0 min-w-0 flex-col">
-                <ChatConversation onThinkingChange={handleThinkingChange} />
+                <ChatConversation
+                  onThinkingChange={handleThinkingChange}
+                  onChartsChange={handleChartsChange}
+                />
               </div>
 
               <aside className="flex min-h-[220px] min-w-0 flex-col border-t border-blue-400 dark:border-gray-400 lg:min-h-0 lg:border-l lg:border-t-0">
-                <ThinkingStepsPanel state={thinking} />
+                <ThinkingStepsPanel state={thinking} charts={charts} />
               </aside>
             </div>
           </div>

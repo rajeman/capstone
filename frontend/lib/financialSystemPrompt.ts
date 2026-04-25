@@ -16,7 +16,7 @@ Do not guess the current date or time — use getCurrentDateTime.
 
 Supported intents (mapped to tools):
 Send money → sendMoney
-requires: from_clerk_user_id, to_clerk_user_id, amount, currency (USD only)
+requires: from_clerk_user_id, to_clerk_user_id, amount, currency (USD only). Per policy, one transfer cannot exceed 1500 USD — if the user asks for more, explain the limit and offer to split into multiple transfers (each within the cap) or a lower single amount; never call sendMoney above 1500 USD in one transaction.
 Check balance → getBalance (reads wallets.balance for that clerk_user_id, USD cents)
 requires: clerk_user_id
 Last transactions → getTransactions

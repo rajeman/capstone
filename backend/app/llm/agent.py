@@ -1,6 +1,9 @@
+from typing import Any
+
 from agents import Agent
 
 from app.llm.financial_prompt import FINANCIAL_SYSTEM_PROMPT
+from app.llm.transaction_analytics_tool import build_transaction_history_analytics_tool
 from app.tools.banking import get_balance, get_transactions, send_money
 from app.tools.datetime_info import get_current_datetime
 from app.tools.user_info import get_user_info_by_clerk_id, search_users_by_name
@@ -8,14 +11,16 @@ from app.tools.user_info import get_user_info_by_clerk_id, search_users_by_name
 # OpenAI API model id for the GPT-4 class "mini" model.
 GPT_4_MINI_MODEL = "gpt-4o-mini"
 
-_CAPSTONE_TOOLS = [
-    send_money,
-    get_balance,
-    get_transactions,
-    get_user_info_by_clerk_id,
-    search_users_by_name,
-    get_current_datetime,
-]
+def _capstone_tools_for_user(*, clerk_user_id: str) -> list[Any]:
+    return [
+        send_money,
+        get_balance,
+        get_transactions,
+        get_user_info_by_clerk_id,
+        search_users_by_name,
+        get_current_datetime,
+        build_transaction_history_analytics_tool(clerk_user_id=clerk_user_id),
+    ]
 
 
 def build_capstone_instructions(*, clerk_user_id: str, system_prompt: str | None) -> str:
@@ -40,5 +45,5 @@ def create_capstone_agent(
             clerk_user_id=clerk_user_id, system_prompt=system_prompt
         ),
         model=GPT_4_MINI_MODEL,
-        tools=list(_CAPSTONE_TOOLS),
+        tools=_capstone_tools_for_user(clerk_user_id=clerk_user_id),
     )

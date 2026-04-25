@@ -22,6 +22,13 @@ class Settings(BaseSettings):
         default="",
         description="Pushover application API token (https://pushover.net/). If empty, wallet Pushover alerts are disabled.",
     )
+    allow_unprotected_wallet_fund: bool = Field(
+        default=False,
+        description=(
+            "If true, POST /dev/wallet/fund credits any wallet without Clerk auth. "
+            "Enable only for local/testing (set ALLOW_UNPROTECTED_WALLET_FUND=true)."
+        ),
+    )
 
     @property
     def clerk_authorized_party_list(self) -> list[str]:

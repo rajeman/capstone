@@ -1,5 +1,6 @@
 import logging
 import re
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -33,6 +34,17 @@ class DuplicateEmailError(Exception):
 
 
 @dataclass(frozen=True)
+class FundWalletResult:
+    ok: bool
+    detail: str | None = None
+    not_found: bool = False
+    clerk_user_id: str | None = None
+    balance_usd_cents_before: int | None = None
+    balance_usd_cents_after: int | None = None
+    ledger_sender_clerk_user_id: str | None = None
+
+
+@dataclass(frozen=True)
 class SendMoneyResult:
     ok: bool
     detail: str | None = None
@@ -46,6 +58,14 @@ class SendMoneyResult:
 
 # 1000 USD in cents (integer).
 INITIAL_WALLET_BALANCE_USD_CENTS = 1000 * 100
+
+# Outbound wallet transfer cap per transaction (USD cents); enforced in send_money_between_clerk_users.
+MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS = 1500 * 100
+
+
+def _synthetic_dev_fund_sender_id() -> str:
+    """Unique synthetic sender for each dev_fund ledger row (not a Clerk user)."""
+    return f"sender_id_{secrets.token_hex(12)}"
 
 
 class User(TimestampedDocument):
@@ -213,6 +233,26 @@ class UserRepository:
             return SendMoneyResult(
                 ok=False,
                 detail="Transfer amount must be at least one cent.",
+            )
+        if amount_usd_cents > MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS:
+            max_usd = MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS // 100
+            logger.warning(
+                "send_money_between_clerk_users: rejected over per-tx cap "
+                "sender_id=%s receiver_id=%s amount_usd_cents=%s cap=%s",
+                sender_id,
+                receiver_id,
+                amount_usd_cents,
+                MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS,
+            )
+            return SendMoneyResult(
+                ok=False,
+                detail=(
+                    f"A single transfer cannot exceed {max_usd} USD. "
+                    "Split larger amounts into multiple transfers or reduce the amount."
+                ),
+                amount_usd_cents=amount_usd_cents,
+                from_clerk_user_id=sender_id,
+                to_clerk_user_id=receiver_id,
             )
 
         db = self._client.get_default_database()
@@ -469,6 +509,84 @@ class UserRepository:
                     "server, configure a replica set so multi-document transactions work."
                 ),
             )
+
+    async def fund_wallet_for_clerk_user(
+        self,
+        clerk_user_id: str,
+        amount_usd_cents: int,
+    ) -> FundWalletResult:
+        """Credit a wallet and append a dev_fund ledger row (no debit peer)."""
+        uid = clerk_user_id.strip()
+        if not uid:
+            return FundWalletResult(ok=False, detail="clerk_user_id must be non-empty.")
+        if amount_usd_cents <= 0:
+            return FundWalletResult(
+                ok=False,
+                detail="amount_usd_cents must be a positive integer (USD cents).",
+            )
+
+        db = self._client.get_default_database()
+        if db is None:
+            logger.error("fund_wallet_for_clerk_user: no default database on client uri")
+            return FundWalletResult(
+                ok=False,
+                detail="database_uri must include a database name in the path.",
+            )
+
+        wallets = db[Wallet.Settings.name]
+        transactions_coll = db[Transaction.Settings.name]
+
+        prior = await wallets.find_one({"clerk_user_id": uid})
+        if prior is None:
+            return FundWalletResult(
+                ok=False,
+                not_found=True,
+                detail="No wallet exists for this Clerk user id.",
+                clerk_user_id=uid,
+            )
+
+        balance_before = int(prior.get("balance") or 0)
+        inc = await wallets.update_one(
+            {"clerk_user_id": uid},
+            {"$inc": {"balance": amount_usd_cents}},
+        )
+        if inc.modified_count == 0:
+            return FundWalletResult(
+                ok=False,
+                detail="Wallet balance update failed.",
+                clerk_user_id=uid,
+            )
+
+        after_doc = await wallets.find_one({"clerk_user_id": uid})
+        balance_after = int(after_doc.get("balance") or 0) if after_doc else balance_before + amount_usd_cents
+
+        ledger_sender = _synthetic_dev_fund_sender_id()
+        now = datetime.now(timezone.utc)
+        await transactions_coll.insert_one(
+            {
+                "clerk_user_id": uid,
+                "sender_clerk_user_id": ledger_sender,
+                "receiver_clerk_user_id": uid,
+                "amount_usd_cents": amount_usd_cents,
+                "side": "credit",
+                "kind": "dev_fund",
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        logger.info(
+            "fund_wallet_for_clerk_user: credited clerk_user_id=%s amount_usd_cents=%s balance_after=%s",
+            uid,
+            amount_usd_cents,
+            balance_after,
+        )
+        return FundWalletResult(
+            ok=True,
+            clerk_user_id=uid,
+            balance_usd_cents_before=balance_before,
+            balance_usd_cents_after=balance_after,
+            ledger_sender_clerk_user_id=ledger_sender,
+        )
 
     def _update_from_clerk_profile(self, user: User, profile: dict) -> None:
         """Apply only fields Clerk provided (non-None). Never change email or Mongo id."""

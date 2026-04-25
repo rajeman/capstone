@@ -1,5 +1,7 @@
 import { FINANCIAL_SYSTEM_PROMPT } from "./financialSystemPrompt";
 import { publicApiBase } from "./publicApiBase";
+import type { AnalyticsChartSpec } from "./analyticsChartTypes";
+import { normalizeChartsPayload } from "./analyticsChartTypes";
 
 export type ChatRole = "user" | "assistant";
 
@@ -22,12 +24,19 @@ export type ReasoningStepPayload = {
 export type ChatResponseBody = {
   message: string;
   reasoning_steps: ReasoningStepPayload[];
+  charts?: unknown;
+};
+
+export type ChatSuccess = {
+  message: string;
+  reasoning_steps: ReasoningStepPayload[];
+  charts: AnalyticsChartSpec[];
 };
 
 export async function postChat(
   token: string | null,
   messages: ChatMessagePayload[],
-): Promise<ChatResponseBody> {
+): Promise<ChatSuccess> {
   const body: ChatRequestBody = {
     system_prompt: FINANCIAL_SYSTEM_PROMPT,
     messages,
@@ -48,5 +57,6 @@ export async function postChat(
   return {
     message: data.message,
     reasoning_steps: data.reasoning_steps ?? [],
+    charts: normalizeChartsPayload(data.charts),
   };
 }

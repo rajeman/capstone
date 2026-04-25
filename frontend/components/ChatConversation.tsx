@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { postChat } from "../lib/chatApi";
 import type { ChatMessagePayload, ReasoningStepPayload } from "../lib/chatApi";
+import type { AnalyticsChartSpec } from "../lib/analyticsChartTypes";
 
 import { ChatMarkdown } from "./ChatMarkdown";
 import type { ThinkingState, ThinkingStep } from "./ThinkingStepsPanel";
@@ -31,6 +32,7 @@ function toPayload(messages: ChatMessage[]): ChatMessagePayload[] {
 
 type ChatConversationProps = {
   onThinkingChange?: (state: ThinkingState) => void;
+  onChartsChange?: (charts: AnalyticsChartSpec[]) => void;
 };
 
 function PaperPlaneIcon(props: { className?: string }) {
@@ -65,7 +67,7 @@ function PaperclipIcon(props: { className?: string }) {
   );
 }
 
-export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
+export function ChatConversation({ onThinkingChange, onChartsChange }: ChatConversationProps) {
   const { user, isLoaded } = useUser();
   const { getToken } = useAuth();
   const [input, setInput] = useState("");
@@ -74,10 +76,15 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const onThinkingRef = useRef(onThinkingChange);
+  const onChartsRef = useRef(onChartsChange);
 
   useEffect(() => {
     onThinkingRef.current = onThinkingChange;
   }, [onThinkingChange]);
+
+  useEffect(() => {
+    onChartsRef.current = onChartsChange;
+  }, [onChartsChange]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -124,10 +131,11 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
         },
       ],
     });
+    onChartsRef.current?.([]);
     setSending(true);
 
     try {
-      const { message, reasoning_steps } = await postChat(token, toPayload(nextMessages));
+      const { message, reasoning_steps, charts } = await postChat(token, toPayload(nextMessages));
       const assistantMsg: ChatMessage = {
         id: `a-${Date.now()}`,
         role: "assistant",
@@ -150,6 +158,7 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
                 },
               ],
       });
+      onChartsRef.current?.(charts);
     } catch (e) {
       const detail = e instanceof Error ? e.message : "Something went wrong.";
       const assistantMsg: ChatMessage = {
@@ -170,6 +179,7 @@ export function ChatConversation({ onThinkingChange }: ChatConversationProps) {
           },
         ],
       });
+      onChartsRef.current?.([]);
     } finally {
       setSending(false);
       inputRef.current?.focus();
