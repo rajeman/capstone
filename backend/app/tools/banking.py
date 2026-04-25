@@ -116,112 +116,274 @@ def _parse_transfer_amount_usd_cents(amount: str) -> int:
     return int(cents)
 
 
-@function_tool(name_override="sendMoney")
-async def send_money(
-    from_clerk_user_id: Annotated[
-        str,
-        Field(
-            description=(
-                "Sender: use the authenticated user's Clerk id from system instructions — never ask the user."
-            ),
-        ),
-    ],
-    to_clerk_user_id: Annotated[
-        str,
-        Field(
-            description=(
-                "Recipient: use the clerk_user_id from the searchUsersByName result row after the user "
-                "picks someone by name or email — never ask the user for an id."
-            ),
-        ),
-    ],
-    amount: Annotated[
-        str,
-        Field(
-            description=(
-                "Transfer amount as a decimal string (USD). "
-                f"Maximum {MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS // 100} USD per transfer; split larger amounts."
-            )
-        ),
-    ],
-    currency: Annotated[str, Field(description="ISO 4217 currency code; must be USD for wallet transfers.")],
-) -> str:
-    """Transfer funds between wallets (USD, integer cents). Fill Clerk ids from instructions and search results — never ask the user for them."""
-    try:
-        amount_usd_cents = _parse_transfer_amount_usd_cents(amount)
-    except ValueError as e:
-        return json.dumps({"ok": False, "detail": str(e), "tool": "sendMoney"})
+def build_evaluate_send_money_instruction_tool(*, auth_clerk_user_id: str):
+    """
+    Pre-flight check for a transfer from the signed-in user's wallet only (same rules as sendMoney).
+    """
+    auth_id = auth_clerk_user_id.strip()
 
-    cur = currency.strip().upper()
-    if cur != "USD":
-        return json.dumps(
-            {
-                "ok": False,
-                "detail": f"Only USD wallet transfers are supported; got currency {currency!r}.",
-                "tool": "sendMoney",
-            }
-        )
-
-    if amount_usd_cents > MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS:
-        max_usd = MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS // 100
-        return json.dumps(
-            {
-                "ok": False,
-                "detail": (
-                    f"A single transfer cannot exceed {max_usd} USD. "
-                    "Split larger amounts into multiple transfers or reduce the amount."
+    @function_tool(name_override="evaluateSendMoneyInstruction")
+    async def evaluate_send_money_instruction(
+        session_clerk_user_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "Must be the exact clerk_user_id from getAuthenticatedClerkUserId — call that tool first, "
+                    "then pass the returned string here so the transfer is validated against the real signed-in user."
                 ),
-                "attempted_amount_usd_cents": amount_usd_cents,
-                "max_amount_usd_cents": MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS,
+            ),
+        ],
+        recipient_clerk_user_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "Recipient Clerk id from searchUsersByName (same value you would pass to sendMoney). "
+                    "Debits are always from the signed-in user's wallet only — another person's wallet cannot be used."
+                ),
+            ),
+        ],
+        amount: Annotated[
+            str,
+            Field(description="Transfer amount as a decimal string (USD), same as for sendMoney."),
+        ],
+        currency: Annotated[
+            str, Field(description="ISO 4217 currency code; must be USD (same as for sendMoney).")
+        ],
+    ) -> str:
+        """Evaluate whether a send-money request is allowed before calling sendMoney (own wallet only)."""
+        tool = "evaluateSendMoneyInstruction"
+
+        if not auth_id:
+            return json.dumps(
+                {
+                    "allowed": False,
+                    "code": "no_session",
+                    "message_for_user": (
+                        "We could not verify your session, so transfers are not available right now. "
+                        "Please sign in again and try once more."
+                    ),
+                    "tool": tool,
+                }
+            )
+
+        if session_clerk_user_id.strip() != auth_id:
+            return json.dumps(
+                {
+                    "allowed": False,
+                    "code": "session_verification_failed",
+                    "message_for_user": (
+                        "We could not match this transfer to your signed-in account. "
+                        "Please call getAuthenticatedClerkUserId and use that exact id as session_clerk_user_id, then try again."
+                    ),
+                    "tool": tool,
+                }
+            )
+
+        recipient = recipient_clerk_user_id.strip()
+        if not recipient:
+            return json.dumps(
+                {
+                    "allowed": False,
+                    "code": "missing_recipient",
+                    "message_for_user": "I need a clear recipient before we can send money. Try searching by name first.",
+                    "tool": tool,
+                }
+            )
+        if recipient == auth_id:
+            return json.dumps(
+                {
+                    "allowed": False,
+                    "code": "self_transfer",
+                    "message_for_user": "Transfers have to go to someone other than yourself. Pick a recipient from your contacts search.",
+                    "tool": tool,
+                }
+            )
+
+        try:
+            amount_usd_cents = _parse_transfer_amount_usd_cents(amount)
+        except ValueError as e:
+            return json.dumps(
+                {
+                    "allowed": False,
+                    "code": "invalid_amount",
+                    "message_for_user": str(e),
+                    "tool": tool,
+                }
+            )
+
+        cur = currency.strip().upper()
+        if cur != "USD":
+            return json.dumps(
+                {
+                    "allowed": False,
+                    "code": "unsupported_currency",
+                    "message_for_user": "Only US dollar transfers are supported here. Please choose USD.",
+                    "tool": tool,
+                }
+            )
+
+        if amount_usd_cents > MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS:
+            max_usd = MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS // 100
+            return json.dumps(
+                {
+                    "allowed": False,
+                    "code": "amount_over_limit",
+                    "message_for_user": (
+                        f"Each transfer can be at most {max_usd} USD. "
+                        "You can send a smaller amount or split it into more than one transfer."
+                    ),
+                    "tool": tool,
+                }
+            )
+
+        repo = UserRepository(get_mongo_client())
+        recv_wallet = await repo.get_wallet_by_clerk_id(recipient)
+        if recv_wallet is None:
+            return json.dumps(
+                {
+                    "allowed": False,
+                    "code": "recipient_no_wallet",
+                    "message_for_user": (
+                        "That recipient does not have an active wallet in Smart Pay yet, "
+                        "so we cannot complete a transfer to them."
+                    ),
+                    "tool": tool,
+                }
+            )
+
+        return json.dumps(
+            {
+                "allowed": True,
+                "code": "ok",
+                "message_for_user": (
+                    "This transfer looks fine to send from your own wallet. "
+                    "You can go ahead and complete it with sendMoney using the same recipient, amount, and currency."
+                ),
+                "tool": tool,
+            }
+        )
+
+    return evaluate_send_money_instruction
+
+
+def build_send_money_tool(*, auth_clerk_user_id: str):
+    """
+    sendMoney bound to the signed-in user: debits only their wallet (sender id is not model-supplied).
+    """
+    sender_id = auth_clerk_user_id.strip()
+
+    @function_tool(name_override="sendMoney")
+    async def send_money_from_my_account(
+        to_clerk_user_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "Recipient only: clerk_user_id from searchUsersByName after the user picks someone "
+                    "by name or email — never ask the user for an id. You cannot send from anyone else's account."
+                ),
+            ),
+        ],
+        amount: Annotated[
+            str,
+            Field(
+                description=(
+                    "Transfer amount as a decimal string (USD), from the signed-in user's wallet. "
+                    f"Maximum {MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS // 100} USD per transfer; split larger amounts."
+                )
+            ),
+        ],
+        currency: Annotated[
+            str, Field(description="ISO 4217 currency code; must be USD for wallet transfers.")
+        ],
+    ) -> str:
+        """Send money from the signed-in user's wallet to another user (USD). Recipient id comes from search results only."""
+        if not sender_id:
+            return json.dumps(
+                {
+                    "ok": False,
+                    "detail": "Cannot send money: session is missing a valid authenticated user id.",
+                    "tool": "sendMoney",
+                }
+            )
+
+        try:
+            amount_usd_cents = _parse_transfer_amount_usd_cents(amount)
+        except ValueError as e:
+            return json.dumps({"ok": False, "detail": str(e), "tool": "sendMoney"})
+
+        cur = currency.strip().upper()
+        if cur != "USD":
+            return json.dumps(
+                {
+                    "ok": False,
+                    "detail": f"Only USD wallet transfers are supported; got currency {currency!r}.",
+                    "tool": "sendMoney",
+                }
+            )
+
+        if amount_usd_cents > MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS:
+            max_usd = MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS // 100
+            return json.dumps(
+                {
+                    "ok": False,
+                    "detail": (
+                        f"A single transfer cannot exceed {max_usd} USD. "
+                        "Split larger amounts into multiple transfers or reduce the amount."
+                    ),
+                    "attempted_amount_usd_cents": amount_usd_cents,
+                    "max_amount_usd_cents": MAX_WALLET_TRANSFER_PER_TRANSACTION_USD_CENTS,
+                    "tool": "sendMoney",
+                }
+            )
+
+        repo = UserRepository(get_mongo_client())
+        try:
+            result = await repo.send_money_between_clerk_users(
+                sender_id,
+                to_clerk_user_id,
+                amount_usd_cents,
+                allowed_debit_clerk_user_id=sender_id,
+            )
+        except ValueError as e:
+            return json.dumps(
+                {
+                    "ok": False,
+                    "detail": str(e),
+                    "tool": "sendMoney",
+                }
+            )
+        except Exception as e:
+            return json.dumps(
+                {
+                    "ok": False,
+                    "detail": f"Transfer failed unexpectedly: {type(e).__name__}: {e}",
+                    "tool": "sendMoney",
+                }
+            )
+        if not result.ok:
+            err: dict = {
+                "ok": False,
+                "detail": result.detail,
+                "tool": "sendMoney",
+            }
+            if result.amount_usd_cents is not None:
+                err["attempted_amount_usd_cents"] = result.amount_usd_cents
+            if result.sender_balance_usd_cents is not None:
+                err["sender_balance_usd_cents"] = result.sender_balance_usd_cents
+            return json.dumps(err)
+        return json.dumps(
+            {
+                "ok": True,
+                "from_clerk_user_id": result.from_clerk_user_id,
+                "to_clerk_user_id": result.to_clerk_user_id,
+                "amount_usd_cents": result.amount_usd_cents,
+                "sender_balance_usd_cents_after": result.sender_balance_usd_cents_after,
+                "currency": "USD",
                 "tool": "sendMoney",
             }
         )
 
-    repo = UserRepository(get_mongo_client())
-    try:
-        result = await repo.send_money_between_clerk_users(
-            from_clerk_user_id,
-            to_clerk_user_id,
-            amount_usd_cents,
-        )
-    except ValueError as e:
-        return json.dumps(
-            {
-                "ok": False,
-                "detail": str(e),
-                "tool": "sendMoney",
-            }
-        )
-    except Exception as e:
-        return json.dumps(
-            {
-                "ok": False,
-                "detail": f"Transfer failed unexpectedly: {type(e).__name__}: {e}",
-                "tool": "sendMoney",
-            }
-        )
-    if not result.ok:
-        err: dict = {
-            "ok": False,
-            "detail": result.detail,
-            "tool": "sendMoney",
-        }
-        if result.amount_usd_cents is not None:
-            err["attempted_amount_usd_cents"] = result.amount_usd_cents
-        if result.sender_balance_usd_cents is not None:
-            err["sender_balance_usd_cents"] = result.sender_balance_usd_cents
-        return json.dumps(err)
-    return json.dumps(
-        {
-            "ok": True,
-            "from_clerk_user_id": result.from_clerk_user_id,
-            "to_clerk_user_id": result.to_clerk_user_id,
-            "amount_usd_cents": result.amount_usd_cents,
-            "sender_balance_usd_cents_after": result.sender_balance_usd_cents_after,
-            "currency": "USD",
-            "tool": "sendMoney",
-        }
-    )
+    return send_money_from_my_account
 
 
 @function_tool(name_override="getBalance")

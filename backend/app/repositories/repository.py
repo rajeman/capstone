@@ -190,6 +190,8 @@ class UserRepository:
         from_clerk_user_id: str,
         to_clerk_user_id: str,
         amount_usd_cents: int,
+        *,
+        allowed_debit_clerk_user_id: str,
     ) -> SendMoneyResult:
         """Debit sender and credit receiver atomically (USD wallet balances in cents)."""
         logger.info(
@@ -200,6 +202,7 @@ class UserRepository:
         )
         sender_id = from_clerk_user_id.strip()
         receiver_id = to_clerk_user_id.strip()
+        must_debit = allowed_debit_clerk_user_id.strip()
         if not sender_id or not receiver_id:
             logger.warning(
                 "send_money_between_clerk_users: rejected empty id after_strip "
@@ -211,6 +214,24 @@ class UserRepository:
             return SendMoneyResult(
                 ok=False,
                 detail="Sender and recipient Clerk user ids must be non-empty.",
+            )
+        if not must_debit or sender_id != must_debit:
+            logger.warning(
+                "send_money_between_clerk_users: rejected debit must match allowed clerk "
+                "sender_id=%r allowed_debit=%r amount_usd_cents=%s",
+                sender_id,
+                must_debit,
+                amount_usd_cents,
+            )
+            return SendMoneyResult(
+                ok=False,
+                detail=(
+                    "Transfers may only debit your own Smart Pay wallet — "
+                    "not another person's account."
+                ),
+                from_clerk_user_id=sender_id,
+                to_clerk_user_id=receiver_id,
+                amount_usd_cents=amount_usd_cents,
             )
         if sender_id == receiver_id:
             logger.warning(

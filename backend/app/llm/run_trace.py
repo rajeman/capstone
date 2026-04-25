@@ -8,6 +8,8 @@ from agents.items import MessageOutputItem, RunItem, ToolCallItem
 
 # SDK tool names → one line a customer might understand (no jargon, no payloads).
 _FRIENDLY_TOOL_LABEL: dict[str, str] = {
+    "getAuthenticatedClerkUserId": "Confirmed your account for this session",
+    "evaluateSendMoneyInstruction": "Checked your transfer request",
     "sendMoney": "Handled your transfer",
     "getBalance": "Checked your balance",
     "getTransactions": "Looked up your recent activity",
