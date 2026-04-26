@@ -12,6 +12,10 @@ locals {
       PUSHOVER_APPLICATION_TOKEN        = var.pushover_application_token
       NEXT_PUBLIC_API_URL               = var.next_public_api_url
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = var.next_public_clerk_publishable_key
+      LANGSMITH_TRACING                 = var.langsmith_tracing
+      LANGSMITH_ENDPOINT                = var.langsmith_endpoint
+      LANGSMITH_API_KEY                 = var.langsmith_api_key
+      LANGSMITH_PROJECT                 = var.langsmith_project
     },
   )
 }

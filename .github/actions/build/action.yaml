@@ -47,6 +47,22 @@ inputs:
   tf-var-next-public-clerk-publishable-key:
     description: TF_VAR_next_public_clerk_publishable_key
     required: true
+  tf-var-langsmith-tracing:
+    description: TF_VAR_langsmith_tracing (optional)
+    required: false
+    default: ""
+  tf-var-langsmith-endpoint:
+    description: TF_VAR_langsmith_endpoint (optional)
+    required: false
+    default: ""
+  tf-var-langsmith-api-key:
+    description: TF_VAR_langsmith_api_key (optional)
+    required: false
+    default: ""
+  tf-var-langsmith-project:
+    description: TF_VAR_langsmith_project (optional)
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -79,6 +95,10 @@ runs:
         TF_VAR_pushover_application_token: ${{ inputs.tf-var-pushover-application-token }}
         TF_VAR_next_public_api_url: ${{ inputs.tf-var-next-public-api-url }}
         TF_VAR_next_public_clerk_publishable_key: ${{ inputs.tf-var-next-public-clerk-publishable-key }}
+        TF_VAR_langsmith_tracing: ${{ inputs.tf-var-langsmith-tracing }}
+        TF_VAR_langsmith_endpoint: ${{ inputs.tf-var-langsmith-endpoint }}
+        TF_VAR_langsmith_api_key: ${{ inputs.tf-var-langsmith-api-key }}
+        TF_VAR_langsmith_project: ${{ inputs.tf-var-langsmith-project }}
       run: |
         terraform init -input=false
         terraform apply -auto-approve -input=false

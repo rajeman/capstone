@@ -113,6 +113,34 @@ variable "next_public_clerk_publishable_key" {
   sensitive   = true
 }
 
+variable "langsmith_tracing" {
+  description = "LANGSMITH_TRACING for the app (e.g. true). Optional. Set via TF_VAR_langsmith_tracing or terraform.tfvars."
+  type        = string
+  default     = ""
+  sensitive   = false
+}
+
+variable "langsmith_endpoint" {
+  description = "LANGSMITH_ENDPOINT (optional; self-hosted or regional LangSmith API URL)."
+  type        = string
+  default     = ""
+  sensitive   = false
+}
+
+variable "langsmith_api_key" {
+  description = "LANGSMITH_API_KEY for LangSmith tracing. Optional. Set via TF_VAR_langsmith_api_key or terraform.tfvars."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "langsmith_project" {
+  description = "LANGSMITH_PROJECT (optional LangSmith project name)."
+  type        = string
+  default     = ""
+  sensitive   = false
+}
+
 variable "runtime_environment_variables" {
   description = "Additional plain environment variables merged into the App Runner service (optional)."
   type        = map(string)

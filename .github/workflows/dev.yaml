@@ -19,6 +19,15 @@ jobs:
       - name: Clone the repository
         uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Run backend unit tests
+        working-directory: backend
+        run: uv sync --group dev && uv run --group dev pytest tests/ -q
+
       - name: Terraform init (PR) or init + apply (main)
         uses: ./.github/actions/build
         with:
@@ -37,6 +46,10 @@ jobs:
           tf-var-pushover-application-token: ${{ secrets.TF_VAR_pushover_application_token }}
           tf-var-next-public-api-url: ${{ secrets.TF_VAR_next_public_api_url }}
           tf-var-next-public-clerk-publishable-key: ${{ secrets.TF_VAR_next_public_clerk_publishable_key }}
+          tf-var-langsmith-tracing: ${{ secrets.TF_VAR_langsmith_tracing }}
+          tf-var-langsmith-endpoint: ${{ secrets.TF_VAR_langsmith_endpoint }}
+          tf-var-langsmith-api-key: ${{ secrets.TF_VAR_langsmith_api_key }}
+          tf-var-langsmith-project: ${{ secrets.TF_VAR_langsmith_project }}
 
   deploy:
     runs-on: ubuntu-latest
