@@ -2,6 +2,8 @@
 
 Full-stack demo banking app: a **Next.js** frontend with **Clerk** sign-in talks to a **FastAPI** backend that stores users, wallets, and transactions in **MongoDB**. A **GPT-4o-mini** agent (OpenAI Agents SDK) powers chat: balances, transfers, directory search, and optional **transaction analytics charts**. Optional **Pushover** notifies parties after wallet transfers. The same process can serve the exported static UI and the API (Docker / AWS App Runner).
 
+The **UI** takes design cues from **Ed Donner**’s Healthcare AI app in Udemy’s course *Generative and Agentic AI in Production* — see the [course lecture overview](https://www.udemy.com/course/generative-and-agentic-ai-in-production/learn/lecture/52443417#overview).
+
 ---
 
 ## What it does
