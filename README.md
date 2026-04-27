@@ -96,6 +96,8 @@ uv sync --group dev && uv run --group dev pytest tests/ -q
 
 ## Architecture (summary)
 
+![Capstone Banking Demo – architecture overview](Architectural%20Diagram.png)
+
 | Layer | Role |
 |--------|------|
 | **Browser** | Next.js + Clerk; Bearer JWT on API calls; static assets from same origin in container deploy. |
